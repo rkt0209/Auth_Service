@@ -7,7 +7,8 @@ const create = async (req,res)=>{
     try {
         const response = await userService.create({
             email:req.body.email,
-            password:req.body.password
+            password:req.body.password,
+            role: req.body.role || 'Passenger'
         });
 
          return res.status(200).json({
@@ -46,7 +47,7 @@ const get = async (req,res)=>{
 }
 const signIn = async(req,res)=>{
     try {
-        const response = await userService.signIn(req.body.email,req.body.password);
+        const response = await userService.signIn(req.body.email, req.body.password, req.body.role || 'Passenger');
         return res.status(200).json({
             data:response,
             message:"Successful Sign In and Token Generated",

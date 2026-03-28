@@ -4,6 +4,8 @@ const {JWTKEY} = require('../config/serverConfig');
 const bcrypt = require('bcrypt');
 const UserRepository = require('../repository/user-repository');
 const AppErrors = require('../utils/error-handlers');
+const ClientError = require('../utils/client-error');
+const { StatusCodes } = require('http-status-codes');
 
 class UserService{
     constructor(){
@@ -34,24 +36,39 @@ class UserService{
             }
     }
 
-    async signIn(userEmail,plainPassword){
+    async signIn(userEmail, plainPassword, requestedRole){
         try {
             const user = await this.userRepository.getByEmail(userEmail);
-            const matchPassword = this.checkPassword(plainPassword,user.password);
+            const matchPassword = this.checkPassword(plainPassword, user.password);
             if(!matchPassword){
-                console.log("Password Does'nt Matched");
-                throw {error:'Wrong password'};
+                throw new ClientError(
+                    'WrongPassword',
+                    'Incorrect password',
+                    'The password you entered does not match our records',
+                    StatusCodes.UNAUTHORIZED
+                );
             }
-           const newJwt = this.createToken({email:user.email,id:user.id});
-           return newJwt;
+            // Role enforcement: reject if the account role doesn't match what was requested
+            const storedRole = (user.role || 'Passenger').toLowerCase();
+            const wantedRole = (requestedRole || 'Passenger').toLowerCase();
+            if(storedRole !== wantedRole){
+                const displayRole = user.role || 'Passenger';
+                throw new ClientError(
+                    'RoleMismatch',
+                    `Access denied: You are not registered as ${requestedRole}. Your account role is ${displayRole}.`,
+                    `Account role is ${displayRole}, but sign-in was attempted as ${requestedRole}`,
+                    StatusCodes.FORBIDDEN
+                );
+            }
+            const newJwt = this.createToken({email:user.email, id:user.id, role:user.role});
+            return newJwt;
         } catch (error) {
-             if(error.name == 'AttributeNotFound'){
-                console.log("Hello service here");
-                    throw error;
-                }
-             console.log("Something wrong in service layer");
+            if(error.name == 'AttributeNotFound' || error.name == 'WrongPassword' || error.name == 'RoleMismatch'){
                 throw error;
             }
+            console.log("Something wrong in service layer");
+            throw error;
+        }
     }
      async isAuthenticated(token){
         try {
